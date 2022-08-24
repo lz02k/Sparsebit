@@ -95,8 +95,8 @@ with torch.no_grad():
         cur_size += data.shape[0]
         if cur_size >= calib_size:
             break
-model.init_QAT()  # 调用API，初始化QAT
 model.set_lastmodule_wbit(bit=8)  # 额外规定最后一层权重的量化bit数
+model.init_QAT()  # 调用API，初始化QAT
 print(model.model)  # 可以在print出的模型信息中看到网络各层weight和activation的量化scale和zeropoint
 
 criterion = nn.CrossEntropyLoss().cuda()
