@@ -103,6 +103,7 @@ if __name__ == "__main__":
         args.model_name,
         load_quant=args.load_quant,
         checkpoint=args.checkpoint,
+        bnb=args.bnb,
     )
 
     DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
