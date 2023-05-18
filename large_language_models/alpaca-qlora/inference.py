@@ -1,14 +1,11 @@
-import time
 from tqdm import tqdm
 import warnings
 import os
 
 import torch
-import torch.distributed as dist
 
 import transformers
-from transformers import LlamaTokenizer
-from transformers import LlamaForCausalLM
+from transformers import LlamaForCausalLM, LlamaTokenizer
 
 
 def calc_model_size(model: torch.nn.Module):
@@ -110,8 +107,8 @@ if __name__ == "__main__":
 
     model = load_llama(
         args.model_name,
-        load_quant=args.load_quant,
         checkpoint=args.checkpoint,
+        load_quant=args.load_quant,
         bnb=args.bnb,
     )
 
