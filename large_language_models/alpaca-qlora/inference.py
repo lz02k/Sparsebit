@@ -63,6 +63,7 @@ def load_llama(model_name, checkpoint="", load_quant=False, bnb=False, groupsize
         print("Loading Quant model ...")
         model.load_state_dict(ckpt["model"])
         model.seqlen = 2048
+        model = model.to(DEV)
 
     print("done.")
     return model
@@ -98,6 +99,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tokenizer = LlamaTokenizer.from_pretrained(args.model_name)
+    DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     model = load_llama(
         args.model_name,
@@ -106,7 +108,6 @@ if __name__ == "__main__":
         bnb=args.bnb,
     )
 
-    DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     inputs = tokenizer.encode(args.prompt, return_tensors="pt").to(DEV)
     if args.batch_size != 1:
         inputs.repeat(args.batch_size, 1)
