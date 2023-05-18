@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import transformers
 from transformers import LlamaForCausalLM
-from qmatmul import Quant4Matmul
+from qmatmul import Quant4Matmul, Quant8Matmul
 
 
 def find_layers(module, layers=[nn.Conv2d, nn.Linear], name=""):
@@ -57,7 +57,7 @@ def modulename_remap(ckpt, is_pp_mode=False, num_layers=None):
     return new_state_dict
 
 
-def load_qllama(config, checkpoint="", pp_kwargs=None):
+def load_qllama(config, checkpoint="", bit=4, pp_kwargs=None):
     def skip(*args, **kwargs):
         pass
 
@@ -89,7 +89,7 @@ def load_qllama(config, checkpoint="", pp_kwargs=None):
         ckpt_remapped = modulename_remap(
             ckpt, is_pp_mode=True, num_layers=config.num_hidden_layers
         )
-    layers_bit = {k: 4 for k in layers}
+    layers_bit = {k: bit for k in layers}
     make_quant(model, layers_bit)
     model.load_state_dict(ckpt_remapped)
     if pp_kwargs is not None:
@@ -110,26 +110,38 @@ class QuantLinear(nn.Module):
         super().__init__()
         # 3 int32 solved at the same time for 3bit
         # 1 int32 solved at the same time for 4bit
-        self.register_buffer("zeros", torch.zeros((outfeatures, 1)))
-        self.register_buffer("scales", torch.ones((outfeatures, 1)))
         self.register_buffer("bias", torch.zeros(outfeatures))
         self.bit = bit
         self.parallel_bit_nums = 1 if self.bit in [2, 4] else 3
-        assert self.bit in [2, 3, 4], "only support 2/3/4 bit now"
-        pack_bits = 8  # 32
-        self.register_buffer(
-            "qweight",
-            torch.zeros(
-                (
-                    ceiling_div(
-                        infeatures * self.bit, pack_bits * self.parallel_bit_nums
-                    )
-                    * self.parallel_bit_nums,
-                    outfeatures,
+        assert self.bit in [2, 3, 4, 8], "only support 2/3/4 bit now"
+
+        if self.bit == 8:
+            self.register_buffer("zeros", torch.zeros((1, 1)))
+            self.register_buffer("scales", torch.ones((1, 1)))
+            self.register_buffer(
+                "qweight",
+                torch.zeros(
+                    (outfeatures, infeatures),
+                    dtype=torch.int8,
                 ),
-                dtype=torch.int8,
-            ),
-        )
+            )
+        else:
+            self.register_buffer("zeros", torch.zeros((outfeatures, 1)))
+            self.register_buffer("scales", torch.ones((outfeatures, 1)))
+            pack_bits = 8  # 32
+            self.register_buffer(
+                "qweight",
+                torch.zeros(
+                    (
+                        ceiling_div(
+                            infeatures * self.bit, pack_bits * self.parallel_bit_nums
+                        )
+                        * self.parallel_bit_nums,
+                        outfeatures,
+                    ),
+                    dtype=torch.int8,
+                ),
+            )
         self.in_features = infeatures
         self.out_features = outfeatures
 
@@ -248,16 +260,17 @@ class QuantLinear(nn.Module):
             del self.backward_ic_zeros
 
     def train(self, mode: bool = True):
-        if not self.training and mode:
-            self.prepare_backward_scales()
-        elif self.training and not mode:
-            self.undo_prepare_backward_scales()
+        if self.bit == 4:
+            if not self.training and mode:
+                self.prepare_backward_scales()
+            elif self.training and not mode:
+                self.undo_prepare_backward_scales()
         super().train(mode)
 
     def forward(self, x):
         f32 = lambda x: x.to(torch.float32)
         result = (
-            {4: Quant4Matmul}[self.bit]
+            {4: Quant4Matmul, 8: Quant8Matmul}[self.bit]
             .apply(
                 f32(x),
                 self.qweight,

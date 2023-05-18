@@ -34,7 +34,27 @@ void int8gemm_cuda(
   using LayoutInputB = cutlass::layout::ColumnMajor;
   using LayoutOutput = cutlass::layout::RowMajor;
 
-#if CUDA_ARCH >= 750
+#if CUDA_ARCH >= 800
+  using Gemm = cutlass::gemm::device::Gemm<
+      ElementInputA,
+      LayoutInputA,
+      ElementInputB,
+      LayoutInputB,
+      ElementOutput,
+      LayoutOutput,
+      ElementAccumulator,
+      cutlass::arch::OpClassTensorOp,
+      cutlass::arch::Sm80,
+      cutlass::gemm::GemmShape<256, 128, 64>,
+      cutlass::gemm::GemmShape<64, 64, 64>,
+      cutlass::gemm::GemmShape<16, 8, 32>,
+      cutlass::epilogue::thread::LinearCombination<
+          ElementOutput,
+          128 / cutlass::sizeof_bits<ElementOutput>::value,
+          ElementAccumulator,
+          ElementComputeEpilogue>,
+      cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>, 3>;
+#elif CUDA_ARCH >= 750
   using DefaultGemmCfg = cutlass::gemm::device::DefaultGemmConfiguration<
       cutlass::arch::OpClassTensorOp,
       cutlass::arch::Sm75,
@@ -58,6 +78,32 @@ void int8gemm_cuda(
       cutlass::epilogue::thread::LinearCombination<
           ElementOutput,
           128 / cutlass::sizeof_bits<ElementOutput>::value,
+          ElementAccumulator,
+          ElementComputeEpilogue>>;
+#elif CUDA_ARCH >= 700
+  using DefaultGemmCfg = cutlass::gemm::device::DefaultGemmConfiguration<
+      cutlass::arch::OpClassSimt,
+      cutlass::arch::Sm70,
+      ElementInputA,
+      ElementInputB,
+      ElementOutput,
+      ElementAccumulator>;
+  using Gemm = cutlass::gemm::device::Gemm<
+      ElementInputA,
+      LayoutInputA,
+      ElementInputB,
+      LayoutInputB,
+      ElementOutput,
+      LayoutOutput,
+      ElementAccumulator,
+      cutlass::arch::OpClassSimt,
+      cutlass::arch::Sm70,
+      DefaultGemmCfg::ThreadblockShape,
+      DefaultGemmCfg::WarpShape,
+      DefaultGemmCfg::InstructionShape,
+      cutlass::epilogue::thread::LinearCombination<
+          ElementOutput,
+          1,
           ElementAccumulator,
           ElementComputeEpilogue>>;
 #else
