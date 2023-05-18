@@ -6,7 +6,6 @@ import os
 import torch
 import torch.distributed as dist
 
-
 import transformers
 from transformers import LlamaTokenizer
 from transformers import LlamaForCausalLM
@@ -18,6 +17,9 @@ def calc_model_size(model: torch.nn.Module):
         if "embedding" in n:  # skip word-embedding
             continue
         numel_per_device += p.numel()
+    for n, p in model.named_buffers():
+        if "qweight" in n:  # add qweight
+            numel_per_device += p.numel()
     return numel_per_device
 
 
@@ -95,6 +97,11 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
     )
+    parser.add_argument(
+        "--debug",
+        default=False,
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -118,6 +125,8 @@ if __name__ == "__main__":
     for i in range(args.warmup_iters):
         with torch.no_grad():
             outputs = model.generate(inputs, max_new_tokens=100, do_sample=False)
+            if args.debug and i == 0:
+                print(tokenizer.decode(outputs[0]))
     output_new_tokens = outputs.shape[-1] - inputs.shape[-1]
     if args.max_new_tokens != output_new_tokens:
         warnings.warn(
