@@ -135,9 +135,9 @@ if __name__ == "__main__":
                     outputs = model.generate(inputs, max_new_tokens=args.max_new_tokens, do_sample=False)
             print("Nsys Done.")
         else:
-            wait = 0
-            warmup = 0
-            active = 1
+            wait = 5
+            warmup = 5
+            active = 10
             repeat = 1
             max_new_tokens = 10
             schedule = torch.profiler.schedule(
@@ -154,7 +154,7 @@ if __name__ == "__main__":
                 for i in range(wait + warmup + active):
                     with torch.no_grad():
                         outputs = model.generate(
-                            inputs, max_new_tokens=10, do_sample=False
+                            inputs, max_new_tokens=args.max_new_tokens, do_sample=False
                         )
                     prof.step()
         print("Profile Done.")
