@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-name", default="decapoda-research/llama-7b-hf")
     parser.add_argument("--prompt", default="Tell me a story, no less than 200 words")
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--max-new-tokens", type=int, default=100)
+    parser.add_argument("--max-new-tokens", type=int, default=10)
     parser.add_argument("--warmup-iters", type=int, default=10)
     parser.add_argument("--run-iters", type=int, default=50)
     parser.add_argument(
@@ -103,6 +103,12 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
     )
+    parser.add_argument(
+        "--nsys",
+        default=False,
+        action="store_true",
+    )
+
 
     args = parser.parse_args()
 
@@ -123,34 +129,41 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
 
     if args.profile:
-        wait = 0
-        warmup = 0
-        active = 1
-        repeat = 1
-        schedule = torch.profiler.schedule(
-            wait=wait, warmup=warmup, active=active, repeat=repeat
-        )
-        tb_handler = torch.profiler.tensorboard_trace_handler("./profile/")
-        with torch.profiler.profile(
-            schedule=schedule,
-            on_trace_ready=tb_handler,
-            record_shapes=True,
-            profile_memory=True,
-            with_stack=True,
-        ) as prof:
-            for i in range(wait + warmup + active):
+        if args.nsys:
+            for i in range(10):
                 with torch.no_grad():
-                    outputs = model.generate(
-                        inputs, max_new_tokens=100, do_sample=False
-                    )
-                prof.step()
+                    outputs = model.generate(inputs, max_new_tokens=args.max_new_tokens, do_sample=False)
+            print("Nsys Done.")
+        else:
+            wait = 0
+            warmup = 0
+            active = 1
+            repeat = 1
+            max_new_tokens = 10
+            schedule = torch.profiler.schedule(
+                wait=wait, warmup=warmup, active=active, repeat=repeat
+            )
+            tb_handler = torch.profiler.tensorboard_trace_handler("./profile/")
+            with torch.profiler.profile(
+                schedule=schedule,
+                on_trace_ready=tb_handler,
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True,
+            ) as prof:
+                for i in range(wait + warmup + active):
+                    with torch.no_grad():
+                        outputs = model.generate(
+                            inputs, max_new_tokens=10, do_sample=False
+                        )
+                    prof.step()
         print("Profile Done.")
 
     else:
         # warm-up
         for i in range(args.warmup_iters):
             with torch.no_grad():
-                outputs = model.generate(inputs, max_new_tokens=100, do_sample=False)
+                outputs = model.generate(inputs, max_new_tokens=args.max_new_tokens, do_sample=False)
                 # torch.cuda.synchronize()
                 if args.debug and i == 0:
                     print(tokenizer.decode(outputs[0]))
