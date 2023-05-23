@@ -10,13 +10,15 @@ def bench_func_latency(func, args, warm_iters=100, iters=1000):
     cudnn.benchmark = True
     # Warm up
     for i in range(warm_iters):
-        func(*args)
+        with torch.no_grad():
+            func(*args)
     torch.cuda.synchronize()
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     start.record()
     for i in range(iters):
-        func(*args)
+        with torch.no_grad():
+            func(*args)
     end.record()
     torch.cuda.synchronize()
     print(f"Average inference time: {start.elapsed_time(end) / iters} ms")
@@ -61,12 +63,17 @@ def main(args, device):
     print("Input shape: ", x.shape)
 
     int8_linear = int8_linear.to(device)
+    int8_linear.eval()
 
     fp32_linear = fp32_linear.to(device)
+    fp32_linear.eval()
 
     fp16_linear = fp16_linear.to(device)
+    fp16_linear.eval()
 
     print("INT8")
+    with torch.no_grad():
+        _ = int8_linear(x)
     bench_func_latency(
         int8_linear.forward, (x,), warm_iters=args.warm_iters, iters=args.iters
     )
