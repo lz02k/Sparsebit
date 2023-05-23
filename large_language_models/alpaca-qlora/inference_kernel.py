@@ -71,11 +71,9 @@ def main(args, device):
     fp16_linear = fp16_linear.to(device)
     fp16_linear.eval()
 
-    print("INT8")
-    with torch.no_grad():
-        _ = int8_linear(x)
+    print("FP32")
     bench_func_latency(
-        int8_linear.forward, (x,), warm_iters=args.warm_iters, iters=args.iters
+        fp32_linear.forward, (x,), warm_iters=args.warm_iters, iters=args.iters
     )
 
     print("FP16")
@@ -86,9 +84,11 @@ def main(args, device):
         iters=args.iters,
     )
 
-    print("FP32")
+    print("INT8")
+    # with torch.no_grad():
+    #     _ = int8_linear(x)
     bench_func_latency(
-        fp32_linear.forward, (x,), warm_iters=args.warm_iters, iters=args.iters
+        int8_linear.forward, (x,), warm_iters=args.warm_iters, iters=args.iters
     )
 
 
